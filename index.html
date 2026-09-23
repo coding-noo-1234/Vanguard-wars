@@ -1,0 +1,698 @@
+<!doctype html>
+<html lang="en">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ages of Conflict: Ultimate Edition</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&amp;family=Work+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ink:#e7eee8;
+      --muted:#9caf9f;
+      --panel:#12251d;
+      --line:rgba(214,230,215,.16);
+      --gold:#e6bd61;
+      --sea:#173b46;
+      --land:#4f7045;
+      --coast:#89a56a;
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:"Work Sans",sans-serif; color:var(--ink); background:#09150f; }
+    button { font:inherit; }
+    .world-shell { width:100%; min-height:100vh; overflow-x:hidden; background:#09150f; }
+    .grid-field {
+      background-image:
+        linear-gradient(rgba(211,232,214,.04) 1px,transparent 1px),
+        linear-gradient(90deg,rgba(211,232,214,.04) 1px,transparent 1px);
+      background-size:32px 32px;
+    }
+    .panel {
+      background:rgba(18,37,29,.96);
+      border:1px solid var(--line);
+      box-shadow:0 18px 45px rgba(0,0,0,.24);
+    }
+    .micro { font-family:"Space Mono",monospace; font-size:.68rem; letter-spacing:.08em; }
+    .action { transition:transform .16s ease,filter .16s ease,opacity .16s ease; }
+    .action:hover:not(:disabled) { transform:translateY(-2px); filter:brightness(1.1); }
+    .action:focus-visible, canvas:focus-visible { outline:3px solid #f4d779; outline-offset:3px; }
+    .action:disabled { opacity:.42; cursor:not-allowed; }
+    .map-stage {
+      position:relative;
+      overflow:hidden;
+      isolation:isolate;
+      min-height:620px;
+      background:var(--sea);
+      border:1px solid rgba(229,239,224,.28);
+      box-shadow:inset 0 0 100px rgba(0,0,0,.48),0 24px 55px rgba(0,0,0,.2);
+    }
+    .map-stage:after {
+      content:"";
+      position:absolute;
+      inset:0;
+      pointer-events:none;
+      background:radial-gradient(ellipse at center,transparent 38%,rgba(1,10,9,.48) 100%);
+    }
+    #world-map {
+      display:block;
+      width:100%;
+      height:620px;
+      image-rendering:pixelated;
+      cursor:crosshair;
+      touch-action:none;
+      position:relative;
+      z-index:1;
+    }
+    .map-key {
+      position:absolute;
+      z-index:2;
+      bottom:15px;
+      left:15px;
+      background:rgba(9,21,15,.82);
+      backdrop-filter:blur(6px);
+      border:1px solid rgba(231,238,232,.2);
+    }
+    .event {
+      border-left:2px solid var(--gold);
+      padding-left:.7rem;
+      line-height:1.4;
+      animation:entry .35s ease both;
+    }
+    @keyframes entry {
+      from { opacity:0; transform:translateX(8px); }
+      to { opacity:1; transform:translateX(0); }
+    }
+    .reveal { animation:reveal .55s ease both; }
+    @keyframes reveal {
+      from { opacity:0; transform:translateY(14px); }
+      to { opacity:1; transform:translateY(0); }
+    }
+    .stat-row {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      border-bottom:1px solid rgba(214,230,215,.1);
+      padding:.55rem 0;
+      gap:.75rem;
+    }
+    .stat-row:last-child { border-bottom:0; }
+    .rank-row {
+      display:grid;
+      grid-template-columns:1.45rem minmax(0,1fr) 2.2rem;
+      align-items:center;
+      gap:.45rem;
+      margin:.5rem 0;
+    }
+    .rank-track {
+      height:.45rem;
+      border-radius:999px;
+      background:rgba(231,238,232,.12);
+      overflow:hidden;
+    }
+    .rank-fill { height:100%; border-radius:999px; transition:width .35s ease; }
+    .rank-row.is-primary {
+      padding:.3rem .4rem;
+      margin-left:-.4rem;
+      margin-right:-.4rem;
+      border-radius:.45rem;
+      background:rgba(230,189,97,.10);
+    }
+    .map-choice-backdrop {
+      position:fixed;
+      inset:0;
+      z-index:50;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:1.25rem;
+      background:rgba(2,10,7,.72);
+      backdrop-filter:blur(8px);
+    }
+    .map-choice-backdrop[hidden] { display:none; }
+    .map-choice-card { width:min(100%,560px); }
+    @media (max-width:1279px) {
+      .map-stage { min-height:510px; }
+      #world-map { height:510px; }
+    }
+    @media (max-width:640px) {
+      .map-stage { min-height:390px; }
+      #world-map { height:390px; }
+    }
+  </style>
+ </head>
+ <body class="world-shell grid-field">
+  <header class="border-b border-emerald-100/10">
+   <div class="w-full max-w-[1550px] mx-auto px-5 py-5 flex flex-col sm:flex-row gap-4 sm:items-center sm:justify-between">
+    <div class="flex items-center gap-4">
+     <div class="w-11 h-11 rounded-full border border-[#d8c170]/70 bg-[#263d2d] flex items-center justify-center text-[#e6bd61]">
+      <i data-lucide="globe-2" aria-hidden="true"></i>
+     </div>
+     <div>
+      <p class="micro text-[#9caf9f]">GLOBAL WARFARE SIMULATOR</p>
+      <h1 class="text-xl font-extrabold tracking-tight">Ages of Conflict: Ultimate Edition</h1>
+     </div>
+    </div>
+    <div class="flex gap-3 items-center">
+     <div class="rounded-md border border-emerald-100/15 bg-black/20 px-4 py-2">
+      <span class="micro text-[#9caf9f]">YEAR</span> <strong id="year-number" class="ml-2 text-[#e6bd61]">2026</strong>
+     </div>
+     <div class="rounded-md border border-emerald-100/15 bg-[#263d2d] px-3 py-2 text-xs font-bold tracking-wider text-[#e6bd61]">LIVE SIM</div>
+    </div>
+   </div>
+  </header>
+
+  <main class="w-full max-w-[1550px] mx-auto px-5 py-6 lg:py-8">
+   <section class="reveal grid grid-cols-1 xl:grid-cols-[255px_minmax(0,1fr)_285px] gap-5 items-start">
+    
+    <!-- GOD PANEL -->
+    <aside class="panel rounded-xl p-5 xl:sticky xl:top-4">
+     <p class="micro text-[#9caf9f] mb-2">DIVINE INTERVENTION</p>
+     <h2 class="font-bold mb-5 text-base">God Commands</h2>
+     <div class="rounded-lg border border-emerald-100/15 bg-black/20 p-4 mb-4">
+      <p class="micro text-[#9caf9f] mb-1">PRIMARY NATION</p>
+      <p id="primary-name" class="font-bold text-lg text-[#e6bd61]">—</p>
+      <p class="micro text-[#9caf9f] mt-4 mb-1">SECONDARY NATION</p>
+      <p id="secondary-name" class="font-bold text-lg text-[#69c5e9]">—</p>
+     </div>
+     <div class="space-y-2">
+      <button id="war-btn" type="button" class="action w-full rounded-lg bg-[#263d2d] border border-emerald-100/15 px-3 py-3 font-bold flex items-center gap-2 justify-center text-sm" disabled><i data-lucide="swords" width="17"></i><span>Toggle War</span></button>
+      <button id="alliance-btn" type="button" class="action w-full rounded-lg bg-[#263d2d] border border-emerald-100/15 px-3 py-3 font-bold flex items-center gap-2 justify-center text-sm" disabled><i data-lucide="handshake" width="17"></i><span>Form Alliance</span></button>
+      <button id="transfer-btn" type="button" class="action w-full rounded-lg bg-[#263d2d] border border-emerald-100/15 px-3 py-3 font-bold flex items-center gap-2 justify-center text-sm" disabled><i data-lucide="arrow-right-left" width="17"></i><span>Siphon Power</span></button>
+      <button id="stronger-btn" type="button" class="action w-full rounded-lg bg-[#263d2d] border border-emerald-100/15 px-3 py-3 font-bold flex items-center gap-2 justify-center text-sm" disabled><i data-lucide="zap" width="17"></i><span>Boost Power</span></button>
+      <button id="nuke-btn" type="button" class="action w-full rounded-lg bg-[#803131] border border-red-500/40 px-3 py-3 font-bold flex items-center gap-2 justify-center text-sm text-[#ffd1d1]"><i data-lucide="radiation" width="17"></i><span id="nuke-text">Drop Nuke</span></button>
+      <button id="paint-btn" type="button" class="action w-full rounded-lg bg-[#263d2d] border border-emerald-100/15 px-3 py-3 font-bold flex items-center gap-2 justify-center text-sm"><i data-lucide="paintbrush" width="17"></i><span>Paint Territory</span></button>
+      <button id="global-war-btn" type="button" class="action w-full rounded-lg bg-[#263d2d] border border-emerald-100/15 px-3 py-3 font-bold flex items-center gap-2 justify-center text-sm"><i data-lucide="flame" width="17"></i><span>Global Total War</span></button>
+      <button id="end-wars-btn" type="button" class="action w-full rounded-lg bg-[#263d2d] border border-emerald-100/15 px-3 py-3 font-bold flex items-center gap-2 justify-center text-sm"><i data-lucide="shield-check" width="17"></i><span>World Peace Treaty</span></button>
+     </div>
+     <p id="god-message" class="min-h-12 mt-3 text-xs text-[#a7b5a9]"></p>
+     <div class="mt-5 pt-5 border-t border-emerald-100/15">
+      <h3 class="font-bold mb-2 text-sm text-[#e6bd61]">How to Play</h3>
+      <p class="text-xs text-[#cbd6ca] leading-relaxed">Click any nation to make it Primary. Click another to make it Secondary. Use God Commands to shape history or use the Nuke tool to obliterate borders!</p>
+     </div>
+    </aside>
+
+    <!-- MAP STAGE -->
+    <section>
+     <div class="mb-4 flex flex-wrap justify-between gap-3 items-end">
+      <div>
+       <p class="micro text-[#9caf9f] mb-1">GEO-POLITICAL THEATER</p>
+       <h2 class="font-bold text-lg">World Map Theater</h2>
+      </div>
+      <div class="flex gap-4 micro text-[#cbd6ca]">
+       <span class="flex items-center gap-1"><i class="w-2 h-2 rounded-full bg-[#f6d36e]"></i>Primary</span>
+       <span class="flex items-center gap-1"><i class="w-2 h-2 rounded-full bg-[#69c5e9]"></i>Secondary</span>
+       <span class="flex items-center gap-1"><i class="w-2 h-2 rounded-full bg-[#ff7166]"></i>Active War</span>
+      </div>
+     </div>
+     <div class="map-stage rounded-xl">
+      <canvas id="world-map" tabindex="0" role="img"></canvas>
+      <div class="absolute right-4 top-4 z-10 rounded-lg border border-[#e6bd61]/40 bg-[#09150f]/85 px-3 py-2 backdrop-blur-sm">
+       <span class="micro text-[#9caf9f]">SPEED</span> <strong id="map-speed" class="ml-2 text-[#f6d36e]">1x</strong>
+      </div>
+      <div class="map-key rounded-lg px-3 py-2">
+       <span class="micro text-[#9caf9f]">Tip: Click territory to select nations or drop an atomic bomb.</span>
+      </div>
+     </div>
+    </section>
+
+    <!-- STATS / REPORT PANEL -->
+    <aside class="panel rounded-xl p-5 xl:sticky xl:top-4">
+     <p class="micro text-[#9caf9f] mb-2">INTELLIGENCE BRIEF</p>
+     <h2 class="font-bold mb-3 text-base">Global Statistics</h2>
+     <div id="nation-stats" class="text-xs text-[#cbd6ca] mb-4"></div>
+     <div class="border-t border-emerald-100/15 pt-4">
+      <h3 class="font-bold mb-2 text-sm text-[#e6bd61]">Global Power Rankings</h3>
+      <div id="power-ranking"></div>
+     </div>
+     <div class="border-t border-emerald-100/15 pt-4 mt-4">
+      <h3 class="font-bold mb-2 text-sm text-[#e6bd61]">Historical Log</h3>
+      <div id="event-log" class="space-y-3 text-xs text-[#cbd6ca] max-h-48 overflow-y-auto"></div>
+     </div>
+     <div class="mt-5 pt-5 border-t border-emerald-100/15 space-y-2">
+      <button id="pause-btn" type="button" class="action w-full rounded-lg bg-[#263d2d] border border-emerald-100/15 px-4 py-3 font-bold flex justify-center gap-2 items-center text-sm">
+       <span id="pause-icon"><i data-lucide="pause" width="17"></i></span><span>Pause Simulation</span>
+      </button>
+      <button id="speed-btn" type="button" class="action w-full rounded-lg bg-[#263d2d] border border-emerald-100/15 px-4 py-2.5 font-semibold text-sm">Change Speed</button>
+      <button id="reset-btn" type="button" class="action w-full rounded-lg bg-[#3d2626] border border-red-500/30 px-4 py-2.5 font-semibold text-sm text-[#ffadad]">Reset World</button>
+     </div>
+    </aside>
+
+   </section>
+  </main>
+
+  <script>
+    const canvas = document.getElementById("world-map");
+    const ctx = canvas.getContext("2d");
+
+    const COLS = 144;
+    const ROWS = 72;
+    const WATER = -2;
+    const NEUTRAL = -1;
+    const OCEAN_LANE = -3;
+
+    // Expanded Roster: 20 Nations
+    const nations = [
+      { name:"United States", short:"USA", capital:"Washington, D.C.", color:"#4e7793", power:94, base:94, seed:[37,27] },
+      { name:"Brazil", short:"Brazil", capital:"Brasília", color:"#4e8276", power:67, base:67, seed:[50,45] },
+      { name:"Britain", short:"Britain", capital:"London", color:"#806747", power:72, base:72, seed:[70,22] },
+      { name:"France", short:"France", capital:"Paris", color:"#8c5a61", power:76, base:76, seed:[71,26] },
+      { name:"Portugal", short:"Portugal", capital:"Lisbon", color:"#9b694d", power:48, base:48, seed:[66,27] },
+      { name:"Germany", short:"Germany", capital:"Berlin", color:"#637b58", power:79, base:79, seed:[74,24] },
+      { name:"Russia", short:"Russia", capital:"Moscow", color:"#82618f", power:88, base:88, seed:[91,20] },
+      { name:"China", short:"China", capital:"Beijing", color:"#dd695e", power:86, base:86, seed:[108,30] },
+      { name:"India", short:"India", capital:"New Delhi", color:"#8b6b2d", power:74, base:74, seed:[98,38] },
+      { name:"Japan", short:"Japan", capital:"Tokyo", color:"#53acd4", power:70, base:70, seed:[121,31] },
+      { name:"Canada", short:"CAN", capital:"Ottawa", color:"#526c8a", power:70, base:70, seed:[32,12] },
+      { name:"Mexico", short:"MEX", capital:"Mexico City", color:"#9c824d", power:60, base:60, seed:[28,32] },
+      { name:"Argentina", short:"ARG", capital:"Buenos Aires", color:"#46718a", power:58, base:58, seed:[58,62] },
+      { name:"Italy", short:"ITA", capital:"Rome", color:"#7a6352", power:71, base:71, seed:[76,30] },
+      { name:"Australia", short:"AUS", capital:"Canberra", color:"#a88946", power:68, base:68, seed:[122,60] },
+      { name:"South Africa", short:"RSA", capital:"Pretoria", color:"#768a61", power:55, base:55, seed:[89,64] },
+      { name:"Egypt", short:"EGY", capital:"Cairo", color:"#9e7b45", power:62, base:62, seed:[88,38] },
+      { name:"Turkey", short:"TUR", capital:"Ankara", color:"#8a5252", power:69, base:69, seed:[88,29] },
+      { name:"Iran", short:"IRN", capital:"Tehran", color:"#527a69", power:65, base:65, seed:[97,32] },
+      { name:"Indonesia", short:"IDN", capital:"Jakarta", color:"#7a527a", power:64, base:64, seed:[118,52] }
+    ];
+
+    const capitals = nations.map(nation => [{x:nation.seed[0], y:nation.seed[1], name:nation.capital}]);
+
+    let grid = [];
+    let primary = null;
+    let secondary = null;
+    let year = 2026;
+    let running = true;
+    let speedIndex = 1;
+    let paintMode = false;
+    let nukeMode = false;
+    let painting = false;
+    let timer = null;
+    let relations = {};
+    let events = [];
+    const eliminated = new Set();
+
+    const pair = (a,b) => [a,b].sort((x,y) => x-y).join("-");
+    const relation = (a,b) => relations[pair(a,b)] || "neutral";
+    const inBounds = (x,y) => x >= 0 && x < COLS && y >= 0 && y < ROWS;
+    const neighbors = (x,y) => [[x-1,y],[x+1,y],[x,y-1],[x,y+1]];
+
+    function noise(x,y) {
+      const value = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;
+      return value - Math.floor(value);
+    }
+
+    function ellipseLand(x,y,cx,cy,rx,ry,roughness = 0.18) {
+      const dx = (x-cx)/rx;
+      const dy = (y-cy)/ry;
+      return (dx*dx + dy*dy) < (1 + (noise(x,y)-.5) * roughness);
+    }
+
+    function landAt(x,y) {
+      let land = false;
+      const jagged = (cx,cy,rx,ry,roughness=.2) => ellipseLand(x,y,cx,cy,rx,ry,roughness);
+      land ||= jagged(14,13,7,5,.28) || jagged(22,16,14,8,.22) || jagged(34,20,15,9,.20);
+      land ||= jagged(39,27,10,8,.24) || jagged(31,29,11,6,.24) || jagged(43,34,5,8,.20);
+      land ||= jagged(47,40,3,6,.18) || jagged(50,46,2,5,.18);
+      land ||= jagged(42,8,5,6,.22) || jagged(55,34,2,1,.35) || jagged(58,37,2,1,.35);
+      land ||= jagged(53,42,8,11,.22) || jagged(58,50,7,13,.20) || jagged(61,59,5,11,.22) || jagged(64,68,2,4,.25);
+      land ||= jagged(66,19,5,7,.25) || jagged(72,22,9,6,.22) || jagged(80,23,6,7,.24);
+      land ||= jagged(67,29,5,5,.25) || jagged(74,30,5,5,.25) || jagged(80,31,4,4,.28);
+      land ||= jagged(61,17,3,4,.25) || jagged(87,27,3,3,.3);
+      land ||= jagged(82,34,12,8,.22) || jagged(84,43,11,12,.20) || jagged(87,54,8,12,.22);
+      land ||= jagged(91,63,4,8,.24) || jagged(96,45,3,4,.25) || jagged(99,54,2,5,.18);
+      land ||= jagged(91,16,17,8,.22) || jagged(105,20,22,10,.20) || jagged(119,25,14,9,.22);
+      land ||= jagged(108,34,14,10,.22) || jagged(98,37,8,7,.24);
+      land ||= jagged(94,43,7,6,.22) || jagged(105,47,6,9,.24) || jagged(116,46,7,9,.24);
+      land ||= jagged(124,49,4,8,.22) || jagged(129,54,3,6,.2);
+      land ||= jagged(129,29,2,4,.18) || jagged(132,34,2,4,.18) || jagged(127,42,2,4,.18);
+      land ||= jagged(118,55,3,2,.28) || jagged(123,57,3,2,.28) || jagged(130,60,3,2,.28);
+      land ||= jagged(112,59,14,7,.20) || jagged(127,67,2,4,.18) || jagged(135,62,2,4,.18);
+
+      if (y >= 29 && y <= 35 && x >= 67 && x <= 91) land = false;
+      if (x >= 91 && x <= 94 && y >= 35 && y <= 49) land = false;
+      return land;
+    }
+
+    function buildWorld() {
+      grid = Array.from({length:ROWS}, (_,y) =>
+        Array.from({length:COLS}, (_,x) => landAt(x,y) ? NEUTRAL : WATER)
+      );
+
+      nations.forEach((nation,index) => {
+        const [sx,sy] = nation.seed;
+        for (let y=sy-2;y<=sy+2;y++) {
+          for (let x=sx-2;x<=sx+2;x++) {
+            if (!inBounds(x,y) || grid[y][x] !== NEUTRAL) continue;
+            if (Math.abs(x-sx) + Math.abs(y-sy) <= 3) grid[y][x] = index;
+          }
+        }
+      });
+    }
+
+    function territoryCount(id) {
+      let count = 0;
+      for (const row of grid) for (const cell of row) if (cell === id) count++;
+      return count;
+    }
+
+    function addLog(text) {
+      events.unshift(text);
+      events = events.slice(0,6);
+      renderEvents();
+    }
+
+    function setMessage(text) {
+      document.getElementById("god-message").textContent = text;
+    }
+
+    function renderEvents() {
+      const root = document.getElementById("event-log");
+      root.replaceChildren(...events.map(text => {
+        const entry = document.createElement("p");
+        entry.className = "event";
+        entry.textContent = text;
+        return entry;
+      }));
+    }
+
+    function expandNation(id) {
+      const options = [];
+      for (let y=0;y<ROWS;y++) {
+        for (let x=0;x<COLS;x++) {
+          if (grid[y][x] !== id) continue;
+          for (const [nx,ny] of neighbors(x,y)) {
+            if (inBounds(nx,ny) && (grid[ny][nx] === NEUTRAL || grid[ny][nx] === OCEAN_LANE)) options.push([nx,ny]);
+          }
+        }
+      }
+      if (!options.length) return false;
+      const [x,y] = options[Math.floor(Math.random() * options.length)];
+      grid[y][x] = id;
+      return true;
+    }
+
+    function conquer(id) {
+      const options = [];
+      for (let y=0;y<ROWS;y++) {
+        for (let x=0; x<COLS; x++) {
+          if (grid[y][x] !== id) continue;
+          for (const [nx,ny] of neighbors(x,y)) {
+            if (!inBounds(nx,ny)) continue;
+            const rival = grid[ny][nx];
+            if (rival >= 0 && rival !== id && relation(id,rival) === "war") options.push([nx,ny,rival]);
+          }
+        }
+      }
+      if (!options.length) return null;
+      const [x,y,rival] = options[Math.floor(Math.random() * options.length)];
+      const attackerChance = 0.3 + (nations[id].power / (nations[id].power + nations[rival].power)) * 0.3;
+      if (Math.random() < attackerChance) {
+        grid[y][x] = id;
+        const capturedCapital = capitals[rival].find(capital => capital.x === x && capital.y === y);
+        if (capturedCapital) collapseNation(rival, id);
+        return { rival, capturedCapital: Boolean(capturedCapital) };
+      }
+      return null;
+    }
+
+    function collapseNation(id, conquerorId) {
+      for (let y=0; y<ROWS; y++) {
+        for (let x=0; x<COLS; x++) {
+          if (grid[y][x] === id) grid[y][x] = conquerorId !== undefined ? conquerorId : NEUTRAL;
+        }
+      }
+      eliminated.add(id);
+      nations[id].power = 0;
+      capitals[id].length = 0;
+      addLog(`${nations[id].name} was completely annexed by ${conquerorId !== undefined ? nations[conquerorId].name : 'rebels'}!`);
+    }
+
+    function drawMap() {
+      const rect = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      const width = Math.max(1, Math.floor(rect.width));
+      const height = Math.max(1, Math.floor(rect.height));
+
+      canvas.width = Math.floor(width * dpr);
+      canvas.height = Math.floor(height * dpr);
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+      ctx.imageSmoothingEnabled = false;
+
+      const cellW = width / COLS;
+      const cellH = height / ROWS;
+
+      ctx.fillStyle = "#173b46";
+      ctx.fillRect(0,0,width,height);
+
+      for (let y=0;y<ROWS;y++) {
+        for (let x=0;x<COLS;x++) {
+          const cell = grid[y][x];
+          if (cell === WATER) {
+            ctx.fillStyle = noise(x,y) > .84 ? "#1b4650" : "#173b46";
+          } else if (cell === NEUTRAL) {
+            ctx.fillStyle = noise(x,y) > .83 ? "#59794a" : "#4f7045";
+          } else {
+            ctx.fillStyle = nations[cell].color;
+          }
+          ctx.fillRect(Math.floor(x*cellW),Math.floor(y*cellH),Math.ceil(cellW)+.5,Math.ceil(cellH)+.5);
+        }
+      }
+
+      for (let y=0;y<ROWS;y++) {
+        for (let x=0;x<COLS;x++) {
+          const cell = grid[y][x];
+          if (cell < 0) continue;
+          const selected = cell === primary || cell === secondary;
+
+          if (selected) {
+            ctx.strokeStyle = cell === primary ? "#f6d36e" : "#69c5e9";
+            ctx.lineWidth = 1.8;
+            ctx.strokeRect(Math.floor(x*cellW)+.5,Math.floor(y*cellH)+.5,Math.ceil(cellW)-1,Math.ceil(cellH)-1);
+          }
+        }
+      }
+
+      nations.forEach((nation,index) => {
+        capitals[index].forEach(({x,y}) => {
+          if (!inBounds(x,y) || grid[y][x] !== index) return;
+          const px = x * cellW + cellW/2;
+          const py = y * cellH + cellH/2;
+          ctx.fillStyle = "#fff6ce";
+          ctx.fillRect(px-2,py-2,4,4);
+          ctx.font = "700 9px Space Mono, monospace";
+          ctx.fillStyle = "#f6d36e";
+          ctx.fillText("◈", px + 5, py - 5);
+        });
+      });
+    }
+
+    function renderStats() {
+      const slot = document.getElementById("nation-stats");
+      if (primary === null) {
+        slot.innerHTML = "<p class='text-[#a7b5a9]'>Select a nation to inspect its territories, power, and wars.</p>";
+        return;
+      }
+      const nation = nations[primary];
+      const wars = Object.keys(relations).filter(key => relations[key] === "war" && key.split("-").map(Number).includes(primary)).length;
+      slot.innerHTML = `
+        <div class="stat-row"><span>Nation</span><strong>${nation.name}</strong></div>
+        <div class="stat-row"><span>Capital</span><strong>${nation.capital}</strong></div>
+        <div class="stat-row"><span>Territories</span><strong>${territoryCount(primary)}</strong></div>
+        <div class="stat-row"><span>Power Score</span><strong>${nation.power}/100</strong></div>
+        <div class="stat-row"><span>Active Wars</span><strong>${wars}</strong></div>`;
+    }
+
+    function renderRanking() {
+      const root = document.getElementById("power-ranking");
+      const sorted = nations.map((nation,index) => ({nation,index})).sort((a,b) => b.nation.power-a.nation.power);
+      root.replaceChildren(...sorted.map(({nation,index},rank) => {
+        const row = document.createElement("div");
+        row.className = "rank-row" + (primary === index ? " is-primary" : "");
+        row.innerHTML = `
+          <span class="micro text-[#9caf9f]">${rank+1}</span>
+          <div>
+            <div class="flex justify-between gap-2 text-xs mb-1"><span>${nation.short}</span><span>${nation.power}</span></div>
+            <div class="rank-track"><div class="rank-fill" style="width:${nation.power}%;background:${nation.color}"></div></div>
+          </div>
+          <span class="micro text-right text-[#9caf9f]">/100</span>`;
+        return row;
+      }));
+    }
+
+    function render() {
+      document.getElementById("year-number").textContent = year;
+      document.getElementById("primary-name").textContent = primary === null ? "—" : nations[primary].name;
+      document.getElementById("secondary-name").textContent = secondary === null ? "—" : nations[secondary].name;
+
+      const ready = primary !== null && secondary !== null && primary !== secondary;
+      ["war-btn","alliance-btn","transfer-btn"].forEach(id => document.getElementById(id).disabled = !ready);
+      document.getElementById("stronger-btn").disabled = primary === null;
+
+      renderStats();
+      renderRanking();
+      drawMap();
+    }
+
+    function dropNuke(x, y) {
+      let affected = 0;
+      for (let dy = -3; dy <= 3; dy++) {
+        for (let dx = -3; dx <= 3; dx++) {
+          const nx = x + dx, ny = y + dy;
+          if (inBounds(nx, ny) && grid[ny][nx] !== WATER) {
+            grid[ny][nx] = NEUTRAL;
+            affected++;
+          }
+        }
+      }
+      addLog(`💥 ATOMIC BOMB DETONATED! Blast radius wiped out ${affected} sectors into wasteland.`);
+      setMessage("Nuclear strike successful! Land returned to neutral wasteland.");
+      drawMap();
+    }
+
+    function mapClick(event) {
+      const rect = canvas.getBoundingClientRect();
+      const x = Math.floor((event.clientX-rect.left) / rect.width * COLS);
+      const y = Math.floor((event.clientY-rect.top) / rect.height * ROWS);
+
+      if (!inBounds(x,y) || grid[y][x] === WATER) {
+        setMessage("Cannot interact with deep ocean water.");
+        return;
+      }
+
+      if (nukeMode) {
+        dropNuke(x, y);
+        nukeMode = false;
+        document.getElementById("nuke-btn").style.background = "#803131";
+        return;
+      }
+
+      if (paintMode && primary !== null) {
+        grid[y][x] = primary;
+        drawMap();
+        return;
+      }
+
+      const id = grid[y][x];
+      if (id === NEUTRAL) {
+        setMessage("Neutral territory. Unclaimed land.");
+        return;
+      }
+
+      if (primary === null || secondary !== null) {
+        primary = id;
+        secondary = null;
+        setMessage(`Primary target set: ${nations[primary].name}`);
+      } else if (id === primary) {
+        primary = null;
+        setMessage("Selection cleared.");
+      } else {
+        secondary = id;
+        setMessage(`Secondary target set: ${nations[secondary].name}`);
+      }
+      render();
+    }
+
+    function decree(type) {
+      if (type === "stronger") {
+        if (primary === null) return;
+        nations[primary].power = Math.min(100, nations[primary].power + 8);
+        addLog(`${nations[primary].name} received divine military enhancement.`);
+        render();
+        return;
+      }
+      if (primary === null || secondary === null) return;
+      const key = pair(primary, secondary);
+      if (type === "war") {
+        relations[key] = relation(primary, secondary) === "war" ? "neutral" : "war";
+        addLog(relations[key] === "war" ? `War declared between ${nations[primary].name} and ${nations[secondary].name}!` : `Ceasefire signed.`);
+      } else if (type === "alliance") {
+        relations[key] = relation(primary, secondary) === "alliance" ? "neutral" : "alliance";
+        addLog(`Alliance pact signed between ${nations[primary].name} and ${nations[secondary].name}.`);
+      } else if (type === "transfer") {
+        nations[primary].power = Math.min(100, nations[primary].power + 5);
+        nations[secondary].power = Math.max(0, nations[secondary].power - 5);
+        addLog(`Power siphoned to ${nations[primary].name}.`);
+      }
+      render();
+    }
+
+    function advance() {
+      year++;
+      nations.forEach((nation, index) => {
+        if (eliminated.has(index)) return;
+        for (let i = 0; i < (nation.power > 75 ? 2 : 1); i++) expandNation(index);
+        if (Math.random() < 0.3) conquer(index);
+        nation.power = Math.max(10, Math.min(100, nation.power + (Math.random() < 0.5 ? 1 : -1)));
+      });
+      render();
+    }
+
+    function schedule() {
+      clearInterval(timer);
+      timer = setInterval(() => { if (running) advance(); }, [700, 500, 300, 150][speedIndex]);
+    }
+
+    // Button Event Listeners
+    canvas.addEventListener("click", mapClick);
+    document.getElementById("war-btn").addEventListener("click", () => decree("war"));
+    document.getElementById("alliance-btn").addEventListener("click", () => decree("alliance"));
+    document.getElementById("transfer-btn").addEventListener("click", () => decree("transfer"));
+    document.getElementById("stronger-btn").addEventListener("click", () => decree("stronger"));
+    
+    document.getElementById("nuke-btn").addEventListener("click", () => {
+      nukeMode = !nukeMode;
+      paintMode = false;
+      document.getElementById("nuke-btn").style.background = nukeMode ? "#c0392b" : "#803131";
+      setMessage(nukeMode ? "☢️ NUKEMODE ACTIVE: Click anywhere on the map to detonate!" : "Nuke mode canceled.");
+    });
+
+    document.getElementById("paint-btn").addEventListener("click", () => {
+      if (primary === null) { setMessage("Select a primary nation to paint territory."); return; }
+      paintMode = !paintMode;
+      nukeMode = false;
+      setMessage(paintMode ? "Painter tool active. Click map sectors to instantly convert land." : "Painter disabled.");
+    });
+
+    document.getElementById("global-war-btn").addEventListener("click", () => {
+      for (let a = 0; a < nations.length; a++) for (let b = a + 1; b < nations.length; b++) relations[pair(a,b)] = "war";
+      addLog("🌍 TOTAL GLOBAL WAR DECLARED! All nations are hostile.");
+      render();
+    });
+
+    document.getElementById("end-wars-btn").addEventListener("click", () => {
+      relations = {};
+      addLog("🕊️ World Peace Treaty signed by all global powers.");
+      render();
+    });
+
+    document.getElementById("pause-btn").addEventListener("click", () => {
+      running = !running;
+      setMessage(running ? "Simulation running." : "Simulation paused.");
+    });
+
+    document.getElementById("speed-btn").addEventListener("click", () => {
+      speedIndex = (speedIndex + 1) % 4;
+      document.getElementById("map-speed").textContent = `${speedIndex + 1}x`;
+      schedule();
+    });
+
+    document.getElementById("reset-btn").addEventListener("click", () => {
+      relations = {};
+      eliminated.clear();
+      year = 2026;
+      primary = null;
+      secondary = null;
+      nations.forEach((n, i) => { n.power = n.base; capitals[i] = [{x:n.seed[0], y:n.seed[1], name:n.capital}]; });
+      buildWorld();
+      addLog("World reset to baseline configuration.");
+      render();
+    });
+
+    buildWorld();
+    addLog("Simulation online. 20 global superpowers ready for conflict.");
+    render();
+    schedule();
+    lucide.createIcons();
+  </script>
+ </body>
+</html>
